@@ -27,7 +27,7 @@ bitsandbytes
 hf_transfer
 lpips
 pytorch_fid
-optimum-quanto==0.2.4
+optimum-quanto
 sentencepiece
 huggingface_hub
 peft
