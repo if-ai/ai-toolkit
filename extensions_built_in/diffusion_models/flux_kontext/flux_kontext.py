@@ -316,11 +316,11 @@ class FluxKontextModel(BaseModel):
 
         # Enable gradient tracking on at least one input tensor so that PyTorch's
         # checkpointing utility (used inside the Flux Transformer) has a valid
-        # tensor to save for backward. Without this, PyTorch >=2.7 raises
-        #   "Inference tensors cannot be saved for backward".
-        # This is a no-op for the optimisation graph because we never need the
-        # gradient w.r.t. the latents themselves, but it satisfies the API
-        # requirement.
+        # tensor to save for backward. When tensors are built under
+        # `torch.no_grad()` they carry the internal "inference" flag, and
+        # checkpointing cannot save such tensors for the backward pass. We make
+        # a fresh clone (regular tensor) and set `requires_grad`.
+        latent_model_input_packed = latent_model_input_packed.clone()
         latent_model_input_packed.requires_grad_(True)
 
         noise_pred = self.unet(
