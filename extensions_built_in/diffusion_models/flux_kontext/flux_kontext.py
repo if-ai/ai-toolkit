@@ -314,6 +314,15 @@ class FluxKontextModel(BaseModel):
             )
             latent_size = latent.shape[1]
 
+        # Enable gradient tracking on at least one input tensor so that PyTorch's
+        # checkpointing utility (used inside the Flux Transformer) has a valid
+        # tensor to save for backward. Without this, PyTorch >=2.7 raises
+        #   "Inference tensors cannot be saved for backward".
+        # This is a no-op for the optimisation graph because we never need the
+        # gradient w.r.t. the latents themselves, but it satisfies the API
+        # requirement.
+        latent_model_input_packed.requires_grad_(True)
+
         noise_pred = self.unet(
             hidden_states=latent_model_input_packed.to(
                 self.device_torch, cast_dtype),
