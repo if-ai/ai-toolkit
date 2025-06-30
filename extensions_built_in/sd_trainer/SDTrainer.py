@@ -1139,6 +1139,14 @@ class SDTrainer(BaseSDTrainProcess):
         # the current batch does not include a mask tensor (most datasets).
         torch.set_grad_enabled(True)
 
+        # Clone tensors created in the no_grad block to remove the inference flag
+        # This is necessary for PyTorch 2.7+ which has stricter gradient checkpointing requirements
+        noisy_latents = noisy_latents.clone()
+        noise = noise.clone()
+        timesteps = timesteps.clone()
+        if imgs is not None:
+            imgs = imgs.clone()
+
         def get_adapter_multiplier():
             if self.adapter and isinstance(self.adapter, T2IAdapter):
                 # training a t2i adapter, not using as assistant.
