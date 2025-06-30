@@ -735,8 +735,8 @@ class SDTrainer(BaseSDTrainProcess):
     
     
     # ------------------------------------------------------------------
-    #  Mean-Flow loss (Geng et al., “Mean Flows for One-step Generative
-    #  Modelling”, 2025 – see Alg. 1 + Eq. (6) of the paper)
+    #  Mean-Flow loss (Geng et al., "Mean Flows for One-step Generative
+    #  Modelling", 2025 – see Alg. 1 + Eq. (6) of the paper)
     # This version avoids jvp / double-back-prop issues with Flash-Attention
     # adapted from the work of lodestonerock
     # ------------------------------------------------------------------
@@ -1131,6 +1131,9 @@ class SDTrainer(BaseSDTrainProcess):
                     mask_multiplier = mask_multiplier.to(self.device_torch, dtype=dtype).detach()
                     # make avg 1.0
                     mask_multiplier = mask_multiplier / mask_multiplier.mean()
+                    # Re-enable gradient tracking for the training operations that follow.
+                    # Only the preprocessing above should be performed without gradients.
+                    torch.set_grad_enabled(True)
 
         def get_adapter_multiplier():
             if self.adapter and isinstance(self.adapter, T2IAdapter):
