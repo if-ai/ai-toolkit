@@ -324,13 +324,22 @@ class FluxKontextModel(BaseModel):
             .requires_grad_(True)
         )
 
+        safe_encoder_hidden = (
+            text_embeddings.text_embeds
+            .to(self.device_torch, cast_dtype)
+            .clone()
+        )
+        safe_pooled = (
+            text_embeddings.pooled_embeds
+            .to(self.device_torch, cast_dtype)
+            .clone()
+        )
+
         noise_pred = self.unet(
             hidden_states=latent_model_input_packed,
             timestep=timestep / 1000,
-            encoder_hidden_states=text_embeddings.text_embeds.to(
-                self.device_torch, cast_dtype),
-            pooled_projections=text_embeddings.pooled_embeds.to(
-                self.device_torch, cast_dtype),
+            encoder_hidden_states=safe_encoder_hidden,
+            pooled_projections=safe_pooled,
             txt_ids=txt_ids,
             img_ids=img_ids,
             guidance=guidance,
