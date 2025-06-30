@@ -328,12 +328,24 @@ class FluxKontextModel(BaseModel):
             text_embeddings.text_embeds
             .to(self.device_torch, cast_dtype)
             .clone()
+            .detach()
+            .requires_grad_(True)
         )
         safe_pooled = (
             text_embeddings.pooled_embeds
             .to(self.device_torch, cast_dtype)
             .clone()
+            .detach()
+            .requires_grad_(True)
         )
+        
+        # Prepare other tensors for gradient checkpointing
+        txt_ids = txt_ids.to(self.device_torch).clone().detach()
+        img_ids = img_ids.to(self.device_torch).clone().detach()
+        
+        # If guidance is not None, prepare it too
+        if guidance is not None:
+            guidance = guidance.clone().detach()
 
         noise_pred = self.unet(
             hidden_states=latent_model_input_packed,
