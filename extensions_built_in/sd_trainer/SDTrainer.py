@@ -1135,6 +1135,10 @@ class SDTrainer(BaseSDTrainProcess):
                     # Only the preprocessing above should be performed without gradients.
                     torch.set_grad_enabled(True)
 
+        # Ensure gradient tracking is ON for the remaining forward/backward pass even when
+        # the current batch does not include a mask tensor (most datasets).
+        torch.set_grad_enabled(True)
+
         def get_adapter_multiplier():
             if self.adapter and isinstance(self.adapter, T2IAdapter):
                 # training a t2i adapter, not using as assistant.
