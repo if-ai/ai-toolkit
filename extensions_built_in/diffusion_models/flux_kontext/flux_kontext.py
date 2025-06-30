@@ -249,6 +249,18 @@ class FluxKontextModel(BaseModel):
         bypass_guidance_embedding: bool,
         **kwargs
     ):
+        # Create guidance tensor outside no_grad to avoid inference tensor issues
+        if self.unet_unwrapped.config.guidance_embeds:
+            if isinstance(guidance_embedding_scale, list):
+                guidance = torch.tensor(
+                    guidance_embedding_scale, device=self.device_torch)
+            else:
+                guidance = torch.tensor(
+                    [guidance_embedding_scale], device=self.device_torch)
+                guidance = guidance.expand(latent_model_input.shape[0])
+        else:
+            guidance = None
+            
         with torch.no_grad():
             bs, c, h, w = latent_model_input.shape
             # if we have a control on the channel dimension, put it on the batch for packing
@@ -283,18 +295,6 @@ class FluxKontextModel(BaseModel):
             txt_ids = torch.zeros(
                 bs, text_embeddings.text_embeds.shape[1], 3).to(self.device_torch)
 
-            # # handle guidance
-            if self.unet_unwrapped.config.guidance_embeds:
-                if isinstance(guidance_embedding_scale, list):
-                    guidance = torch.tensor(
-                        guidance_embedding_scale, device=self.device_torch)
-                else:
-                    guidance = torch.tensor(
-                        [guidance_embedding_scale], device=self.device_torch)
-                    guidance = guidance.expand(latent_model_input.shape[0])
-            else:
-                guidance = None
-
         if bypass_guidance_embedding:
             bypass_flux_guidance(self.unet)
 
@@ -328,16 +328,31 @@ class FluxKontextModel(BaseModel):
             text_embeddings.text_embeds
             .to(self.device_torch, cast_dtype)
             .clone()
+            .detach()
+            .requires_grad_(True)
         )
         safe_pooled = (
             text_embeddings.pooled_embeds
             .to(self.device_torch, cast_dtype)
             .clone()
+            .detach()
+            .requires_grad_(True)
         )
+        
+        # Prepare other tensors for gradient checkpointing
+        txt_ids = txt_ids.to(self.device_torch).clone().detach()
+        img_ids = img_ids.to(self.device_torch).clone().detach()
+        
+        # Prepare timestep tensor for gradient checkpointing
+        timestep_tensor = (timestep / 1000).to(self.device_torch).clone().detach()
+        
+        # If guidance is not None, prepare it too
+        if guidance is not None:
+            guidance = guidance.to(self.device_torch).clone().detach()
 
         noise_pred = self.unet(
             hidden_states=latent_model_input_packed,
-            timestep=timestep / 1000,
+            timestep=timestep_tensor,
             encoder_hidden_states=safe_encoder_hidden,
             pooled_projections=safe_pooled,
             txt_ids=txt_ids,
