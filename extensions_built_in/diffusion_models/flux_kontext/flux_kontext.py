@@ -249,6 +249,14 @@ class FluxKontextModel(BaseModel):
         bypass_guidance_embedding: bool,
         **kwargs
     ):
+        # Ensure the model is in training mode if gradient checkpointing is enabled
+        if self.unet.training:
+            # Model is in training mode, gradient checkpointing should work
+            pass
+        else:
+            # Force the model into training mode for gradient checkpointing
+            self.unet.train()
+            
         # Create guidance tensor outside no_grad to avoid inference tensor issues
         if self.unet_unwrapped.config.guidance_embeds:
             if isinstance(guidance_embedding_scale, list):
@@ -348,6 +356,14 @@ class FluxKontextModel(BaseModel):
         if guidance is not None:
             guidance = guidance.clone().detach().to(self.device_torch)
 
+        # Process kwargs to ensure no inference tensors
+        safe_kwargs = {}
+        for k, v in kwargs.items():
+            if isinstance(v, torch.Tensor):
+                safe_kwargs[k] = v.clone().detach().to(self.device_torch, dtype=cast_dtype)
+            else:
+                safe_kwargs[k] = v
+
         noise_pred = self.unet(
             hidden_states=latent_model_input_packed.clone(),
             timestep=timestep_tensor.clone(),
@@ -357,7 +373,7 @@ class FluxKontextModel(BaseModel):
             img_ids=img_ids.clone(),
             guidance=guidance.clone() if guidance is not None else None,
             return_dict=False,
-            **kwargs,
+            **safe_kwargs,
         )[0]
         
         # remove kontext image conditioning
