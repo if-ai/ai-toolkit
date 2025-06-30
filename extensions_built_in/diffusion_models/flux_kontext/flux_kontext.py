@@ -339,25 +339,23 @@ class FluxKontextModel(BaseModel):
             .requires_grad_(True)
         )
         
-        # Prepare other tensors for gradient checkpointing
-        txt_ids = txt_ids.to(self.device_torch).clone().detach()
-        img_ids = img_ids.to(self.device_torch).clone().detach()
-        
-        # Prepare timestep tensor for gradient checkpointing
-        timestep_tensor = (timestep / 1000).to(self.device_torch).clone().detach()
+        # Prepare ALL tensors for gradient checkpointing to be safe
+        timestep_tensor = (timestep / 1000).clone().detach().to(self.device_torch, dtype=cast_dtype)
+        txt_ids = txt_ids.clone().detach().to(self.device_torch)
+        img_ids = img_ids.clone().detach().to(self.device_torch)
         
         # If guidance is not None, prepare it too
         if guidance is not None:
-            guidance = guidance.to(self.device_torch).clone().detach()
+            guidance = guidance.clone().detach().to(self.device_torch)
 
         noise_pred = self.unet(
-            hidden_states=latent_model_input_packed,
-            timestep=timestep_tensor,
-            encoder_hidden_states=safe_encoder_hidden,
-            pooled_projections=safe_pooled,
-            txt_ids=txt_ids,
-            img_ids=img_ids,
-            guidance=guidance,
+            hidden_states=latent_model_input_packed.clone(),
+            timestep=timestep_tensor.clone(),
+            encoder_hidden_states=safe_encoder_hidden.clone(),
+            pooled_projections=safe_pooled.clone(),
+            txt_ids=txt_ids.clone(),
+            img_ids=img_ids.clone(),
+            guidance=guidance.clone() if guidance is not None else None,
             return_dict=False,
             **kwargs,
         )[0]
