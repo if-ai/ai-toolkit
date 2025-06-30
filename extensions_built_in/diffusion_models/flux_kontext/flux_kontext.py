@@ -314,18 +314,18 @@ class FluxKontextModel(BaseModel):
             )
             latent_size = latent.shape[1]
 
-        # Enable gradient tracking on at least one input tensor so that PyTorch's
-        # checkpointing utility (used inside the Flux Transformer) has a valid
-        # tensor to save for backward. When tensors are built under
-        # `torch.no_grad()` they carry the internal "inference" flag, and
-        # checkpointing cannot save such tensors for the backward pass. We make
-        # a fresh clone (regular tensor) and set `requires_grad`.
-        latent_model_input_packed = latent_model_input_packed.clone()
-        latent_model_input_packed.requires_grad_(True)
+        # Move to correct device/dtype first, then make a fresh clone that
+        # both requires grad and has the normal autograd tracking flag.
+        latent_model_input_packed = (
+            latent_model_input_packed
+            .to(self.device_torch, cast_dtype)
+            .clone()
+            .detach()
+            .requires_grad_(True)
+        )
 
         noise_pred = self.unet(
-            hidden_states=latent_model_input_packed.to(
-                self.device_torch, cast_dtype),
+            hidden_states=latent_model_input_packed,
             timestep=timestep / 1000,
             encoder_hidden_states=text_embeddings.text_embeds.to(
                 self.device_torch, cast_dtype),
