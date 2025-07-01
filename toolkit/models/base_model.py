@@ -596,6 +596,13 @@ class BaseModel:
             network.multiplier = start_multiplier
 
         self.unet.to(self.device_torch, dtype=self.torch_dtype)
+        
+        # Fix for PyTorch 2.7+: Ensure model is back in training mode after sampling
+        # if gradient checkpointing is enabled (inference mode from @torch.no_grad causes issues)
+        if hasattr(self.unet, 'training') and hasattr(self.unet, 'gradient_checkpointing'):
+            if self.unet.gradient_checkpointing and not self.unet.training:
+                self.unet.train()
+        
         if network.is_merged_in:
             network.merge_out(merge_multiplier)
         # self.tokenizer.to(original_device_dict['tokenizer'])
