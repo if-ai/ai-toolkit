@@ -1913,6 +1913,13 @@ class BaseSDTrainProcess(BaseTrainProcess):
         self.last_save_step = self.step_num
         ### HOOK ###
         self.hook_before_train_loop()
+        
+        # Fix for PyTorch 2.7+ gradient checkpointing with LoRA
+        # Gradient checkpointing requires the model to be in training mode
+        if self.network_config is not None and self.train_config.gradient_checkpointing:
+            if hasattr(self.sd.unet, 'training') and not self.sd.unet.training:
+                print_acc("Setting UNet to training mode for gradient checkpointing compatibility")
+                self.sd.unet.train()
 
         if self.has_first_sample_requested and self.step_num <= 1 and not self.train_config.disable_sampling:
             print_acc("Generating first sample from first sample config")
