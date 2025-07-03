@@ -253,21 +253,6 @@ class BaseSDTrainProcess(BaseTrainProcess):
         if not self.accelerator.is_main_process:
             return
         flush()
-        
-        # Fix for PyTorch 2.7+: Temporarily disable gradient checkpointing during sampling
-        # to avoid "Inference tensors cannot be saved for backward" error
-        checkpointing_was_enabled = False
-        if self.network_config is not None and self.train_config.gradient_checkpointing:
-            if hasattr(self.sd.unet, '_gradient_checkpointing_func_name'):
-                checkpointing_was_enabled = True
-                # Store the original method
-                original_gradient_checkpointing_func = getattr(self.sd.unet, '_gradient_checkpointing_func', None)
-                # Disable gradient checkpointing by removing the method
-                if hasattr(self.sd.unet, '_gradient_checkpointing_func'):
-                    delattr(self.sd.unet, '_gradient_checkpointing_func')
-                if hasattr(self.sd.unet, 'enable_gradient_checkpointing'):
-                    self.sd.unet.gradient_checkpointing = False
-        
         sample_folder = os.path.join(self.save_root, 'samples')
         gen_img_config_list = []
 
@@ -358,11 +343,6 @@ class BaseSDTrainProcess(BaseTrainProcess):
 
         if self.ema is not None:
             self.ema.train()
-            
-        # Restore gradient checkpointing if it was enabled
-        if checkpointing_was_enabled:
-            if hasattr(self.sd.unet, 'enable_gradient_checkpointing'):
-                self.sd.unet.enable_gradient_checkpointing()
 
     def update_training_metadata(self):
         o_dict = OrderedDict({
@@ -1933,14 +1913,6 @@ class BaseSDTrainProcess(BaseTrainProcess):
         self.last_save_step = self.step_num
         ### HOOK ###
         self.hook_before_train_loop()
-        
-        # Fix for PyTorch 2.7+ gradient checkpointing with LoRA
-        # Gradient checkpointing requires the model to be in training mode
-        # This must happen before ANY sampling or training
-        if self.network_config is not None and self.train_config.gradient_checkpointing:
-            if hasattr(self.sd.unet, 'training') and not self.sd.unet.training:
-                print_acc("Setting UNet to training mode for gradient checkpointing compatibility")
-                self.sd.unet.train()
 
         if self.has_first_sample_requested and self.step_num <= 1 and not self.train_config.disable_sampling:
             print_acc("Generating first sample from first sample config")

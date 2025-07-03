@@ -735,8 +735,8 @@ class SDTrainer(BaseSDTrainProcess):
     
     
     # ------------------------------------------------------------------
-    #  Mean-Flow loss (Geng et al., "Mean Flows for One-step Generative
-    #  Modelling", 2025 – see Alg. 1 + Eq. (6) of the paper)
+    #  Mean-Flow loss (Geng et al., “Mean Flows for One-step Generative
+    #  Modelling”, 2025 – see Alg. 1 + Eq. (6) of the paper)
     # This version avoids jvp / double-back-prop issues with Flash-Attention
     # adapted from the work of lodestonerock
     # ------------------------------------------------------------------
@@ -1131,21 +1131,6 @@ class SDTrainer(BaseSDTrainProcess):
                     mask_multiplier = mask_multiplier.to(self.device_torch, dtype=dtype).detach()
                     # make avg 1.0
                     mask_multiplier = mask_multiplier / mask_multiplier.mean()
-                    # Re-enable gradient tracking for the training operations that follow.
-                    # Only the preprocessing above should be performed without gradients.
-                    torch.set_grad_enabled(True)
-
-        # Ensure gradient tracking is ON for the remaining forward/backward pass even when
-        # the current batch does not include a mask tensor (most datasets).
-        torch.set_grad_enabled(True)
-
-        # Clone tensors created in the no_grad block to remove the inference flag
-        # This is necessary for PyTorch 2.7+ which has stricter gradient checkpointing requirements
-        noisy_latents = noisy_latents.clone()
-        noise = noise.clone()
-        timesteps = timesteps.clone()
-        if imgs is not None:
-            imgs = imgs.clone()
 
         def get_adapter_multiplier():
             if self.adapter and isinstance(self.adapter, T2IAdapter):

@@ -249,26 +249,6 @@ class FluxKontextModel(BaseModel):
         bypass_guidance_embedding: bool,
         **kwargs
     ):
-        # Ensure the model is in training mode if gradient checkpointing is enabled
-        if self.unet.training:
-            # Model is in training mode, gradient checkpointing should work
-            pass
-        else:
-            # Force the model into training mode for gradient checkpointing
-            self.unet.train()
-            
-        # Create guidance tensor outside no_grad to avoid inference tensor issues
-        if self.unet_unwrapped.config.guidance_embeds:
-            if isinstance(guidance_embedding_scale, list):
-                guidance = torch.tensor(
-                    guidance_embedding_scale, device=self.device_torch)
-            else:
-                guidance = torch.tensor(
-                    [guidance_embedding_scale], device=self.device_torch)
-                guidance = guidance.expand(latent_model_input.shape[0])
-        else:
-            guidance = None
-            
         with torch.no_grad():
             bs, c, h, w = latent_model_input.shape
             # if we have a control on the channel dimension, put it on the batch for packing
@@ -303,6 +283,18 @@ class FluxKontextModel(BaseModel):
             txt_ids = torch.zeros(
                 bs, text_embeddings.text_embeds.shape[1], 3).to(self.device_torch)
 
+            # # handle guidance
+            if self.unet_unwrapped.config.guidance_embeds:
+                if isinstance(guidance_embedding_scale, list):
+                    guidance = torch.tensor(
+                        guidance_embedding_scale, device=self.device_torch)
+                else:
+                    guidance = torch.tensor(
+                        [guidance_embedding_scale], device=self.device_torch)
+                    guidance = guidance.expand(latent_model_input.shape[0])
+            else:
+                guidance = None
+
         if bypass_guidance_embedding:
             bypass_flux_guidance(self.unet)
 
@@ -322,58 +314,19 @@ class FluxKontextModel(BaseModel):
             )
             latent_size = latent.shape[1]
 
-        # Move to correct device/dtype first, then make a fresh clone that
-        # both requires grad and has the normal autograd tracking flag.
-        latent_model_input_packed = (
-            latent_model_input_packed
-            .to(self.device_torch, cast_dtype)
-            .clone()
-            .detach()
-            .requires_grad_(True)
-        )
-
-        safe_encoder_hidden = (
-            text_embeddings.text_embeds
-            .to(self.device_torch, cast_dtype)
-            .clone()
-            .detach()
-            .requires_grad_(True)
-        )
-        safe_pooled = (
-            text_embeddings.pooled_embeds
-            .to(self.device_torch, cast_dtype)
-            .clone()
-            .detach()
-            .requires_grad_(True)
-        )
-        
-        # Prepare ALL tensors for gradient checkpointing to be safe
-        timestep_tensor = (timestep / 1000).clone().detach().to(self.device_torch, dtype=cast_dtype)
-        txt_ids = txt_ids.clone().detach().to(self.device_torch)
-        img_ids = img_ids.clone().detach().to(self.device_torch)
-        
-        # If guidance is not None, prepare it too
-        if guidance is not None:
-            guidance = guidance.clone().detach().to(self.device_torch)
-
-        # Process kwargs to ensure no inference tensors
-        safe_kwargs = {}
-        for k, v in kwargs.items():
-            if isinstance(v, torch.Tensor):
-                safe_kwargs[k] = v.clone().detach().to(self.device_torch, dtype=cast_dtype)
-            else:
-                safe_kwargs[k] = v
-
         noise_pred = self.unet(
-            hidden_states=latent_model_input_packed.clone(),
-            timestep=timestep_tensor.clone(),
-            encoder_hidden_states=safe_encoder_hidden.clone(),
-            pooled_projections=safe_pooled.clone(),
-            txt_ids=txt_ids.clone(),
-            img_ids=img_ids.clone(),
-            guidance=guidance.clone() if guidance is not None else None,
+            hidden_states=latent_model_input_packed.to(
+                self.device_torch, cast_dtype),
+            timestep=timestep / 1000,
+            encoder_hidden_states=text_embeddings.text_embeds.to(
+                self.device_torch, cast_dtype),
+            pooled_projections=text_embeddings.pooled_embeds.to(
+                self.device_torch, cast_dtype),
+            txt_ids=txt_ids,
+            img_ids=img_ids,
+            guidance=guidance,
             return_dict=False,
-            **safe_kwargs,
+            **kwargs,
         )[0]
         
         # remove kontext image conditioning
