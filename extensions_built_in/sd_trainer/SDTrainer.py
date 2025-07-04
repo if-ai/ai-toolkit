@@ -735,8 +735,8 @@ class SDTrainer(BaseSDTrainProcess):
     
     
     # ------------------------------------------------------------------
-    #  Mean-Flow loss (Geng et al., “Mean Flows for One-step Generative
-    #  Modelling”, 2025 – see Alg. 1 + Eq. (6) of the paper)
+    #  Mean-Flow loss (Geng et al., "Mean Flows for One-step Generative
+    #  Modelling", 2025 – see Alg. 1 + Eq. (6) of the paper)
     # This version avoids jvp / double-back-prop issues with Flash-Attention
     # adapted from the work of lodestonerock
     # ------------------------------------------------------------------
@@ -1087,6 +1087,14 @@ class SDTrainer(BaseSDTrainProcess):
 
             self.timer.stop('preprocess_batch')
 
+            # Re-enable gradient tracking for the forward & backward passes.  
+            # A surrounding `torch.no_grad()` context is used for the heavy, non-differentiable
+            # preprocessing above.  We must turn gradients back on before we call the
+            # network and compute the loss; otherwise `loss.requires_grad` is False and
+            # `self.accelerator.backward(loss)` raises:
+            #     RuntimeError: element 0 of tensors does not require grad and does not have a grad_fn
+            torch.set_grad_enabled(True)
+            
             is_reg = False
             loss_multiplier = torch.ones((noisy_latents.shape[0], 1, 1, 1), device=self.device_torch, dtype=dtype)
             for idx, file_item in enumerate(batch.file_items):
